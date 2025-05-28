@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import BoardViewSet, MemoViewSet, UserViewSet
-from .views import set_board_alarm
+#from .views import set_board_alarm
 
 from .views import (
     signup_view,
@@ -9,6 +9,10 @@ from .views import (
     reset_password_view,
     my_profile,
     summarize_board_view,
+    follow,
+    unfollow,
+    list_following,
+    following_content,
     UserViewSet,
     BoardViewSet,
     MemoViewSet,
@@ -26,5 +30,9 @@ urlpatterns = [
     path('reset-password/', reset_password_view),        
     path('me/', my_profile),                             
     path('boards/<int:pk>/summarize/', summarize_board_view),
-    path('boards/<int:pk>/set-alarm/', set_board_alarm),
+    #path('boards/<int:pk>/set-alarm/', set_board_alarm),
+    path('follow/', follow),
+    path('unfollow/', unfollow),
+    path('allfollower/', list_following),
+    path('following-content/', following_content),
 ]

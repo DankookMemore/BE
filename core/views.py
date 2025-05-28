@@ -24,6 +24,7 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
+#토큰 리턴 함수
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     return {
@@ -31,6 +32,7 @@ def get_tokens_for_user(user):
         'access': str(refresh.access_token),
     }
 
+#유저 정보 리턴
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_profile(request):
@@ -41,6 +43,7 @@ def my_profile(request):
         'nickname': request.user.nickname,
     })
 
+#로그인 로직
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -63,12 +66,13 @@ def login_view(request):
     else:
         return Response({'error': '아이디 또는 비밀번호가 올바르지 않습니다.'}, status=401)
 
-
+#회원가입 로직
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
+    password2 = request.data.get('password2')
     nickname = request.data.get('nickname')
     email = request.data.get('email')
 
@@ -83,6 +87,9 @@ def signup_view(request):
 
     if User.objects.filter(nickname=nickname).exists():
         return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=400)
+    
+    if password != password2:
+        return Response({'error_message' : '비밀번호가 일치하지 않습니다.'}, status=400)
 
     try:
         user = User.objects.create_user(
@@ -96,6 +103,8 @@ def signup_view(request):
     except Exception as e:
         return Response({'error': f'서버 오류: {str(e)}'}, status=500)
 
+
+#비밀번호 재설정 로직
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password_view(request):
@@ -113,13 +122,14 @@ def reset_password_view(request):
     except User.DoesNotExist:
         return Response({'error': '해당 이메일로 등록된 사용자가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
     
+#보드 내용 요약 -> chatgpt 활용
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def summarize_board_view(request, pk):
     board = get_object_or_404(Board, pk=pk, user=request.user)
     memos = Memo.objects.filter(board=board)
     all_text = "\n".join([memo.content for memo in memos if memo.content.strip() != ""])
-
+    print(settings.OPENAI_API_KEY)
     if not all_text:
         return Response({"summary": "요약할 메모가 없습니다."})
 
@@ -145,6 +155,68 @@ def summarize_board_view(request, pk):
     except Exception as e:
         print("❌ GPT 요약 실패:", str(e))
         return Response({"summary": f"[요약 실패] {str(e)}"}, status=500)
+    
+#팔로우
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def follow(request):
+    username = request.data.get('username')
+    if not username:
+        return Response({"error":"usernmae이 필요합니다."}, status = 400)
+    me = request.user
+    target_user = get_object_or_404(User, username=username)
+
+    if me == target_user:
+        return Response({"error": "자기 자신은 팔로우할 수 없습니다."}, status=400)
+
+    me.following.add(target_user)
+    return Response({"message": f"{target_user.username}님을 팔로우했습니다."})
+
+#팔로우 취소
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unfollow(request):
+    username = request.data.get('username')
+    if not username:
+        return Response({"error": "username이 필요합니다."}, status=400)
+
+    me = request.user
+    target_user = get_object_or_404(User, username=username)
+
+    if me == target_user:
+        return Response({"error": "자기 자신은 언팔로우할 수 없습니다."}, status=400)
+
+    me.following.remove(target_user)
+    return Response({"message": f"{target_user.username}님을 언팔로우했습니다."})
+
+#전체 팔로우 리턴
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_following(request):
+    me = request.user
+    following_users = me.following.all()  # ManyToManyField 통해 연결된 유저들
+    serializer = UserSerializer(following_users, many=True)
+    return Response(serializer.data)
+
+#팔로잉 대상의 보드 & 메모 조회 API
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def following_content(request):
+    me = request.user
+    following = me.following.all()
+
+    boards = Board.objects.filter(user__in=following)
+    memos = Memo.objects.filter(user__in=following)
+
+    board_data = BoardSerializer(boards, many=True).data
+    memo_data = MemoSerializer(memos, many=True).data
+
+    return Response({
+        "boards": board_data,
+        "memos": memo_data
+    })
+
+        
 
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
@@ -188,7 +260,9 @@ class MemoViewSet(viewsets.ModelViewSet):
         print("🙋 request.auth:", self.request.auth)
         serializer.save(user=self.request.user)
 
-@api_view(['POST'])
+
+
+'''@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_board_alarm(request, pk):
     print(f"📥 알림 설정 요청: user={request.user}, board_id={pk}, data={request.data}")
@@ -198,4 +272,4 @@ def set_board_alarm(request, pk):
         board.reminder_time = reminder_time
         board.save()
         return Response({"status": "알림 저장 완료"})
-    return Response({"error": "알림 시각이 없습니다"}, status=400)
+    return Response({"error": "알림 시각이 없습니다"}, status=400)'''

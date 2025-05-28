@@ -4,6 +4,12 @@ from django.db import models
 class User(AbstractUser):
     nickname = models.CharField(max_length=30)
     email = models.EmailField(unique=True)
+    following = models.ManyToManyField(
+        'self',
+        symmetrical=False,
+        related_name='followers',
+        blank=True
+    )
 
 class Board(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
