@@ -14,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.db import models
 
-from .models import Board, Memo, User
+from .models import Board, Memo, User, Neighbor, NeighborRequest
 from .serializers import UserSerializer, BoardSerializer, MemoSerializer
 
 User = get_user_model()
@@ -156,57 +156,122 @@ def summarize_board_view(request, pk):
         print("❌ GPT 요약 실패:", str(e))
         return Response({"summary": f"[요약 실패] {str(e)}"}, status=500)
     
-#팔로우
+# 📨 이웃 요청 보내기
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def follow(request):
-    username = request.data.get('username')
-    if not username:
-        return Response({"error":"usernmae이 필요합니다."}, status = 400)
-    me = request.user
-    target_user = get_object_or_404(User, username=username)
-
-    if me == target_user:
-        return Response({"error": "자기 자신은 팔로우할 수 없습니다."}, status=400)
-
-    me.following.add(target_user)
-    return Response({"message": f"{target_user.username}님을 팔로우했습니다."})
-
-#팔로우 취소
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def unfollow(request):
-    username = request.data.get('username')
-    if not username:
+def request_neighbor(request):
+    target_username = request.data.get('username')
+    if not target_username:
         return Response({"error": "username이 필요합니다."}, status=400)
 
     me = request.user
-    target_user = get_object_or_404(User, username=username)
+    target_user = get_object_or_404(User, username=target_username)
 
     if me == target_user:
-        return Response({"error": "자기 자신은 언팔로우할 수 없습니다."}, status=400)
+        return Response({"error": "자기 자신에게 이웃 요청을 보낼 수 없습니다."}, status=400)
 
-    me.following.remove(target_user)
-    return Response({"message": f"{target_user.username}님을 언팔로우했습니다."})
+    if NeighborRequest.objects.filter(sender=me, receiver=target_user).exists():
+        return Response({"error": "이미 요청을 보냈습니다."}, status=400)
 
-#전체 팔로우 리턴
+    if Neighbor.objects.filter(user1=min(me, target_user, key=lambda u: u.id),
+                               user2=max(me, target_user, key=lambda u: u.id)).exists():
+        return Response({"error": "이미 이웃입니다."}, status=400)
+
+    NeighborRequest.objects.create(sender=me, receiver=target_user)
+    return Response({"message": f"{target_user.nickname}님에게 이웃 요청을 보냈습니다."})
+
+
+# ❌ 이웃 요청 취소 (또는 거절)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_neighbor_request(request):
+    target_username = request.data.get('username')
+    if not target_username:
+        return Response({"error": "username이 필요합니다."}, status=400)
+
+    me = request.user
+    target_user = get_object_or_404(User, username=target_username)
+
+    req = NeighborRequest.objects.filter(sender=me, receiver=target_user).first()
+    if req:
+        req.delete()
+        return Response({"message": "이웃 요청이 취소되었습니다."})
+    return Response({"error": "요청 내역이 없습니다."}, status=400)
+
+
+# ✅ 이웃 요청 수락
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_neighbor_request(request):
+    requester_username = request.data.get('username')
+    if not requester_username:
+        return Response({"error": "username이 필요합니다."}, status=400)
+
+    me = request.user
+    requester = get_object_or_404(User, username=requester_username)
+
+    req = NeighborRequest.objects.filter(sender=requester, receiver=me).first()
+    if not req:
+        return Response({"error": "해당 요청이 존재하지 않습니다."}, status=400)
+
+    # 이웃 관계 생성
+    Neighbor.objects.create(
+        user1=min(me, requester, key=lambda u: u.id),
+        user2=max(me, requester, key=lambda u: u.id)
+    )
+    req.delete()
+    return Response({"message": f"{requester.nickname}님과 이웃이 되었습니다."})
+
+
+# 🔄 이웃 끊기
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def remove_neighbor(request):
+    target_username = request.data.get('username')
+    if not target_username:
+        return Response({"error": "username이 필요합니다."}, status=400)
+
+    me = request.user
+    target_user = get_object_or_404(User, username=target_username)
+
+    user1 = min(me, target_user, key=lambda u: u.id)
+    user2 = max(me, target_user, key=lambda u: u.id)
+
+    neighbor = Neighbor.objects.filter(user1=user1, user2=user2).first()
+    if neighbor:
+        neighbor.delete()
+        return Response({"message": "이웃 관계가 해제되었습니다."})
+    return Response({"error": "이웃이 아닙니다."}, status=400)
+
+
+# 🧾 현재 이웃 목록 조회
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def list_following(request):
+def list_neighbors(request):
     me = request.user
-    following_users = me.following.all()  # ManyToManyField 통해 연결된 유저들
-    serializer = UserSerializer(following_users, many=True)
+    # 자신이 포함된 이웃 관계
+    neighbors = Neighbor.objects.filter(models.Q(user1=me) | models.Q(user2=me))
+    neighbor_users = [
+        n.user2 if n.user1 == me else n.user1
+        for n in neighbors
+    ]
+    serializer = UserSerializer(neighbor_users, many=True)
     return Response(serializer.data)
 
-#팔로잉 대상의 보드 & 메모 조회 API
+
+# 📋 이웃들의 보드와 메모 보기
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def following_content(request):
+def neighbors_content(request):
     me = request.user
-    following = me.following.all()
+    neighbors = Neighbor.objects.filter(models.Q(user1=me) | models.Q(user2=me))
+    neighbor_users = [
+        n.user2 if n.user1 == me else n.user1
+        for n in neighbors
+    ]
 
-    boards = Board.objects.filter(user__in=following)
-    memos = Memo.objects.filter(user__in=following)
+    boards = Board.objects.filter(user__in=neighbor_users)
+    memos = Memo.objects.filter(user__in=neighbor_users)
 
     board_data = BoardSerializer(boards, many=True).data
     memo_data = MemoSerializer(memos, many=True).data
@@ -215,50 +280,6 @@ def following_content(request):
         "boards": board_data,
         "memos": memo_data
     })
-
-        
-
-class BoardViewSet(viewsets.ModelViewSet):
-    queryset = Board.objects.all()
-    serializer_class = BoardSerializer
-    permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['user']
-    reminder_time = models.DateTimeField(null=True, blank=True)
-
-    def get_queryset(self):
-        user = self.request.user
-        if not user or not user.is_authenticated:
-            print("❌ [get_queryset] 인증되지 않은 사용자")
-            return Board.objects.none()
-        print(f"📥 [get_queryset] 요청자: {user}")
-        return Board.objects.filter(user=user)
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        print("✅ [perform_create] 호출됨")
-        print("👤 현재 사용자:", user)
-        if not user or not user.is_authenticated:
-            print("❌ [perform_create] 인증되지 않은 사용자")
-            return  # 명시적으로 막음
-
-        serializer.save(user=user)
-        print("✅ [perform_create] 보드 저장 완료")
-
-class MemoViewSet(viewsets.ModelViewSet):
-    queryset = Memo.objects.all()
-    serializer_class = MemoSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['board']
-
-    def get_queryset(self):
-        return Memo.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        print("📍 Board 추가 요청")
-        print("🙋 request.user:", self.request.user)
-        print("🙋 request.auth:", self.request.auth)
-        serializer.save(user=self.request.user)
 
 
 
