@@ -46,7 +46,7 @@ class BoardSerializer(serializers.ModelSerializer):
         model = Board
         fields = [
             'id', 'title', 'summary', 'is_completed',
-            'user', 'created_at'
+            'user', 'created_at', 'category'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -58,3 +58,11 @@ class MemoSerializer(serializers.ModelSerializer):
         model = Memo
         fields = ['id', 'board', 'content', 'timestamp', 'is_finished', 'summary', 'user']
         read_only_fields = ['id', 'timestamp', 'summary', 'user']
+
+    def validate_board(self, value):
+        # 사용방법 보드 용도로 board=0 허용
+        if value is None:
+            return None
+        if isinstance(value, int) and value == 0:
+            return None
+        return value

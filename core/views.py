@@ -13,6 +13,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.db import models
+from django.db.models import Q
 
 from .models import Board, Memo, User, Neighbor, NeighborRequest
 from .serializers import UserSerializer, BoardSerializer, MemoSerializer
@@ -20,6 +21,34 @@ from .serializers import UserSerializer, BoardSerializer, MemoSerializer
 User = get_user_model()
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+class MemoViewSet(viewsets.ModelViewSet):
+    queryset = Memo.objects.all()
+    serializer_class = MemoSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Memo.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        board_id = self.request.data.get('board')
+        if board_id in [0, '0', None, 'null', 'None']:  # '사용방법' 보드 처리
+            serializer.save(user=self.request.user, board=None)
+        else:
+            serializer.save(user=self.request.user)
+
+# ✅ BoardViewSet 추가
+class BoardViewSet(viewsets.ModelViewSet):
+    queryset = Board.objects.all()
+    serializer_class = BoardSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Board.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+# ✅ 기존 UserViewSet 포함
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -156,6 +185,8 @@ def summarize_board_view(request, pk):
         print("❌ GPT 요약 실패:", str(e))
         return Response({"summary": f"[요약 실패] {str(e)}"}, status=500)
     
+
+    
 # 📨 이웃 요청 보내기
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -281,6 +312,47 @@ def neighbors_content(request):
         "memos": memo_data
     })
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users_view(request):
+    query = request.GET.get('q', '')
+    if not query:
+        return Response({"detail": "검색어를 입력해주세요."}, status=status.HTTP_400_BAD_REQUEST)
+
+    matched_users = User.objects.filter(username__icontains=query).values('id', 'username', 'nickname', 'email')
+    return Response(matched_users, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_neighbor_request(request):
+    target_id = request.data.get('target_id')
+    if not target_id:
+        return Response({"error": "target_id가 필요합니다."}, status=400)
+
+    try:
+        target_user = User.objects.get(username=target_id)
+    except User.DoesNotExist:
+        return Response({"error": "해당 사용자를 찾을 수 없습니다."}, status=404)
+
+    if NeighborRequest.objects.filter(sender=request.user, receiver=target_user).exists():
+        return Response({"message": "이미 요청을 보냈습니다."}, status=400)
+
+    NeighborRequest.objects.create(sender=request.user, receiver=target_user)
+    return Response({"message": "이웃 요청이 전송되었습니다."}, status=201)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users(request):
+    query = request.GET.get('q', '')
+    if not query:
+        return Response([], status=200)
+
+    users = User.objects.filter(
+        Q(username__icontains=query) | Q(nickname__icontains=query)
+    ).exclude(id=request.user.id)
+
+    results = [{'username': user.username} for user in users]
+    return Response(results, status=200)
 
 
 '''@api_view(['POST'])
