@@ -14,10 +14,10 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def validate_username(self, value):
-        try:
+        '''try:
             validate_email(value)
         except ValidationError:
-            raise serializers.ValidationError("유효한 이메일 주소를 입력해주세요.")
+            raise serializers.ValidationError("유효한 이메일 주소를 입력해주세요.")'''
         return value
 
     def validate_password(self, value):
@@ -45,7 +45,7 @@ class BoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Board
         fields = [
-            'id', 'title', 'category', 'summary', 'is_completed',
+            'id', 'title', 'summary', 'is_completed',
             'user', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
