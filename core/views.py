@@ -25,9 +25,16 @@ class MemoViewSet(viewsets.ModelViewSet):
     queryset = Memo.objects.all()
     serializer_class = MemoSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['board', 'user']  # 👈 여기 user 추가
 
     def get_queryset(self):
-        return Memo.objects.filter(user=self.request.user)
+        queryset = super().get_queryset()
+        user = self.request.query_params.get('user')
+
+        if user:
+            return queryset.filter(user__id=user)
+        return queryset.filter(user=self.request.user)
 
     def perform_create(self, serializer):
         board_id = self.request.data.get('board')
@@ -211,6 +218,16 @@ def request_neighbor(request):
     NeighborRequest.objects.create(sender=me, receiver=target_user)
     return Response({"message": f"{target_user.nickname}님에게 이웃 요청을 보냈습니다."})
 
+#받은 이웃 요청 전부 조회
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def received_neighbor_requests(request):
+    receiver = request.user
+    requests = NeighborRequest.objects.filter(receiver=receiver)
+    senders = [req.sender for req in requests]
+    serializer = UserSerializer(senders, many=True)
+    return Response(serializer.data)
+
 
 # ❌ 이웃 요청 취소 (또는 거절)
 @api_view(['POST'])
@@ -223,7 +240,7 @@ def cancel_neighbor_request(request):
     me = request.user
     target_user = get_object_or_404(User, username=target_username)
 
-    req = NeighborRequest.objects.filter(sender=me, receiver=target_user).first()
+    req = NeighborRequest.objects.filter(sender=target_user, receiver=me).first()
     if req:
         req.delete()
         return Response({"message": "이웃 요청이 취소되었습니다."})
@@ -325,12 +342,12 @@ def search_users_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def send_neighbor_request(request):
-    target_id = request.data.get('target_id')
-    if not target_id:
+    username = request.data.get('username')
+    if not username:
         return Response({"error": "target_id가 필요합니다."}, status=400)
 
     try:
-        target_user = User.objects.get(username=target_id)
+        target_user = User.objects.get(username=username)
     except User.DoesNotExist:
         return Response({"error": "해당 사용자를 찾을 수 없습니다."}, status=404)
 
@@ -353,16 +370,3 @@ def search_users(request):
 
     results = [{'username': user.username} for user in users]
     return Response(results, status=200)
-
-
-'''@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def set_board_alarm(request, pk):
-    print(f"📥 알림 설정 요청: user={request.user}, board_id={pk}, data={request.data}")
-    board = get_object_or_404(Board, pk=pk, user=request.user)
-    reminder_time = request.data.get('reminder_time')
-    if reminder_time:
-        board.reminder_time = reminder_time
-        board.save()
-        return Response({"status": "알림 저장 완료"})
-    return Response({"error": "알림 시각이 없습니다"}, status=400)'''
