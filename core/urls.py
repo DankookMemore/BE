@@ -3,7 +3,7 @@ from .views import (
     login_view, signup_view, reset_password_view, my_profile,search_users,
     summarize_board_view, BoardViewSet, MemoViewSet, search_users_view,
     send_neighbor_request, cancel_neighbor_request, accept_neighbor_request,
-    remove_neighbor, list_neighbors, neighbors_content
+    remove_neighbor, list_neighbors, neighbors_content, received_neighbor_requests
 )
 from rest_framework.routers import DefaultRouter
 
@@ -26,7 +26,8 @@ urlpatterns = [
     # path('boards/<int:pk>/set-alarm/', set_board_alarm),  # 필요시 활성화
 
     # 이웃 기능 (팔로우 → 이웃 요청 구조로 변경됨)
-    path('neighbor/request/', send_neighbor_request),                 # 이웃 요청 보내기
+    path('neighbor/request/', send_neighbor_request),            # 이웃 요청 보내기
+    path('neighbor/requests/', received_neighbor_requests),
     path('neighbor/cancel/', cancel_neighbor_request),           # 이웃 요청 취소
     path('neighbor/accept/', accept_neighbor_request),           # 이웃 요청 수락
     path('neighbor/remove/', remove_neighbor),                   # 이웃 삭제
