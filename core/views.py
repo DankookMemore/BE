@@ -26,7 +26,7 @@ class MemoViewSet(viewsets.ModelViewSet):
     serializer_class = MemoSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['board', 'user']  # 👈 여기 user 추가
+    filterset_fields = ['board', 'user'] 
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -38,12 +38,12 @@ class MemoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         board_id = self.request.data.get('board')
-        if board_id in [0, '0', None, 'null', 'None']:  # '사용방법' 보드 처리
+        if board_id in [0, '0', None, 'null', 'None']:
             serializer.save(user=self.request.user, board=None)
         else:
             serializer.save(user=self.request.user)
 
-# ✅ BoardViewSet 추가
+# BoardViewSet 추가
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
@@ -55,7 +55,7 @@ class BoardViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-# ✅ 기존 UserViewSet 포함
+# UserViewSet
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -72,7 +72,7 @@ def get_tokens_for_user(user):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_profile(request):
-    print("✅ 사용자 프로필 요청:", request.user)
+    print("사용자 프로필 요청:", request.user)
     return Response({
         'id': request.user.id,
         'username': request.user.username,
@@ -89,7 +89,7 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
 
     if user is not None:
-        # ✅ JWT 토큰 발급
+        # JWT 토큰 발급
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
 
@@ -175,7 +175,7 @@ def summarize_board_view(request, pk):
             messages=[
                 {
                     "role": "user",
-                    "content": f"다음은 아이디어 메모입니다. 전체 흐름을 고려하여 아이디어 내용을 주제와 아이디어에 대한 생각을 나눠서 정리해주세요:\n\n{all_text}"
+                    "content": f"다음은 아이디어 메모입니다. 전체 흐름을 고려하여 아이디어 내용을 주제와 아이디어에 대한 생각을 나눠서 정리해주세요. 주제와 주제에 대한 아이디어(아이디어 흐름을 번호로 정리해주세요)를 형식에 맞춰서 보여주세요:\n\n{all_text}"
                 }
             ],
             max_tokens=300,
@@ -189,12 +189,12 @@ def summarize_board_view(request, pk):
         return Response({"summary": summary})
 
     except Exception as e:
-        print("❌ GPT 요약 실패:", str(e))
+        print("GPT 요약 실패:", str(e))
         return Response({"summary": f"[요약 실패] {str(e)}"}, status=500)
     
 
     
-# 📨 이웃 요청 보내기
+# 이웃 요청 보내기
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def request_neighbor(request):
@@ -229,7 +229,7 @@ def received_neighbor_requests(request):
     return Response(serializer.data)
 
 
-# ❌ 이웃 요청 취소 (또는 거절)
+# 이웃 요청 취소 (또는 거절)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def cancel_neighbor_request(request):
@@ -247,7 +247,7 @@ def cancel_neighbor_request(request):
     return Response({"error": "요청 내역이 없습니다."}, status=400)
 
 
-# ✅ 이웃 요청 수락
+# 이웃 요청 수락
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def accept_neighbor_request(request):
@@ -271,7 +271,7 @@ def accept_neighbor_request(request):
     return Response({"message": f"{requester.nickname}님과 이웃이 되었습니다."})
 
 
-# 🔄 이웃 끊기
+# 이웃 끊기
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def remove_neighbor(request):
@@ -292,7 +292,7 @@ def remove_neighbor(request):
     return Response({"error": "이웃이 아닙니다."}, status=400)
 
 
-# 🧾 현재 이웃 목록 조회
+# 현재 이웃 목록 조회
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_neighbors(request):
@@ -307,7 +307,7 @@ def list_neighbors(request):
     return Response(serializer.data)
 
 
-# 📋 이웃들의 보드와 메모 보기
+# 이웃들의 보드와 메모 보기
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def neighbors_content(request):
