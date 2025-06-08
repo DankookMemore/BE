@@ -42,6 +42,7 @@ urlpatterns = [
 
     # 보드 기능
     path('boards/<int:pk>/summarize/', summarize_board_view),
+
     # path('boards/<int:pk>/set-alarm/', set_board_alarm),  # 필요시 활성화
 
     # 이웃 기능 (팔로우 → 이웃 요청 구조로 변경됨)

@@ -162,7 +162,10 @@ def reset_password_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def summarize_board_view(request, pk):
-    board = get_object_or_404(Board, pk=pk, user=request.user)
+    try:
+        board = get_object_or_404(Board, pk=pk, user=request.user)
+    except Exception as e:
+        board = get_object_or_404(Board, pk=pk)
     memos = Memo.objects.filter(board=board)
     all_text = "\n".join([memo.content for memo in memos if memo.content.strip() != ""])
     print(settings.OPENAI_API_KEY)
@@ -191,7 +194,7 @@ def summarize_board_view(request, pk):
     except Exception as e:
         print("GPT 요약 실패:", str(e))
         return Response({"summary": f"[요약 실패] {str(e)}"}, status=500)
-    
+
 
     
 # 이웃 요청 보내기
