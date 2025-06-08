@@ -6,13 +6,32 @@ from .views import (
     remove_neighbor, list_neighbors, neighbors_content, received_neighbor_requests
 )
 from rest_framework.routers import DefaultRouter
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg       import openapi
 
 router = DefaultRouter()
 router.register(r'boards', BoardViewSet, basename='board')
 router.register(r'memos', MemoViewSet, basename='memos')
 # 여기에 ViewSet 등록이 있다면 router.register(...) 코드 포함
 
+schema_view = get_schema_view(
+    openapi.Info(
+        title="MEMO-RE",
+        default_version='1.0.0',
+        description="MEMO-RE API 문서",
+        terms_of_service="https://www.google.com/policies/terms/",
+
+    ),
+    public=True,
+    permission_classes=[permissions.AllowAny],
+)
+
 urlpatterns = [
+    path(r'swagger(?P<format>\.json|\.yaml)', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    path(r'swagger', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path(r'redoc', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc-v1'),
+
     path('', include(router.urls)),        
 
     # 인증 및 계정
