@@ -5,7 +5,7 @@ openai.api_key = settings.OPENAI_API_KEY
 
 def summarize_memos(contents: list[str]) -> str:
     messages = [
-        {"role": "system", "content": "다음 아이디어 메모 내용을 실행할 수 있도록 구체화하는 계획 형식으로 요약해줘."},
+        {"role": "system", "content": "첫번째 메모는 아이디어 주제에 대한 것이고 두번째 메모부터 아이디어 내용을 구체화 하는 메모입니다. 아이디어 계획 형태로 정리해주세요. 그리고 첫번째 메모에 적혀진 주제와 아이디어 내용이 어긋나는 것이 있으면 이 내용이 주제와 벗어났다고 알려주세요"},
         {"role": "user", "content": "\n".join(contents)},
     ]
 
